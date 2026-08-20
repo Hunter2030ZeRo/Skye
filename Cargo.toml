@@ -1,0 +1,19 @@
+[package]
+name = "skye"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+half = "2.7.1"
+
+[dev-dependencies]
+criterion = "0.8.2"
+rand = "0.10.2"
+
+[[bench]]
+name = "gemv"
+harness = false
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
