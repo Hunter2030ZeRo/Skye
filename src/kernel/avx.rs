@@ -8,7 +8,7 @@ unsafe fn dot_block_avx2(
     packed_weights: *const u8,
     activations: *const f16,
     block_scale: f32,
-) -> f32 {
+) -> __m256 {
     unsafe {
         let packed = _mm_loadu_si64(packed_weights);
 
@@ -51,9 +51,11 @@ unsafe fn dot_block_avx2(
 
         let products = _mm256_fmadd_ps(w1, x1, products0);
 
-        let sum = horizontal_sum_avx(products);
+        let scale = _mm256_set1_ps(block_scale * 0.5);
 
-        sum * block_scale * 0.5
+        let result = _mm256_mul_ps(products, scale);
+
+        result
     }
 }
 
@@ -87,7 +89,7 @@ pub unsafe fn gemv_avx2(weights: &NvFp4Matrix, x: &[f16], y: &mut [f32]) {
     let blocks_per_row = weights.cols / 16;
 
     for row in 0..weights.rows {
-        let mut acc = 0.0f32;
+        let mut vec_acc = _mm256_setzero_ps();
 
         for block in 0..blocks_per_row {
             let col_start = block * 16;
@@ -109,9 +111,11 @@ pub unsafe fn gemv_avx2(weights: &NvFp4Matrix, x: &[f16], y: &mut [f32]) {
                 )
             };
 
-            acc += block_result;
+            vec_acc = _mm256_add_ps(vec_acc, block_result);
         }
 
-        y[row] = acc * weights.global_scale;
+        unsafe {
+            y[row] = horizontal_sum_avx(vec_acc) * weights.global_scale;
+        }
     }
 }

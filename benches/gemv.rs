@@ -11,12 +11,15 @@ use skye::kernel::scalar::gemv_scalar;
 #[cfg(target_arch = "x86_64")]
 use skye::kernel::avx::gemv_avx2;
 
+#[cfg(target_arch = "x86_64")]
+use skye::kernel::fp16::gemv_fp16_avx2;
+
 fn make_weights(rows: usize, cols: usize) -> NvFp4Matrix {
     assert_eq!(cols % 16, 0);
 
     let num_weights = rows * cols;
 
-    // E2M1 값 두 개 / byte.
+    // E2M1 값 두 개 / byte
     //
     // 0x23:
     // low  nibble = 0x3 = +1.5
@@ -39,7 +42,11 @@ fn bench_gemv(c: &mut Criterion) {
     // 오늘 빠르게 확인하려면 이 두 개면 충분.
     //
     // 최종 결과 낼 때 4096x4096 등을 더 추가.
-    let shapes = [(1024usize, 1024usize), (4096usize, 4096usize)];
+    let shapes = [
+        (1024usize, 1024usize),
+        (4096usize, 4096usize),
+        (8192usize, 8192usize),
+    ];
 
     for &(rows, cols) in &shapes {
         let weights = make_weights(rows, cols);
@@ -72,6 +79,30 @@ fn bench_gemv(c: &mut Criterion) {
                     gemv_avx2(black_box(&weights), black_box(&x), black_box(&mut y_avx2));
 
                     black_box(&y_avx2);
+                });
+            });
+        }
+
+        let fp16_weights = vec![f16::from_f32(1.0); rows * cols];
+
+        let mut y_fp16 = vec![0.0f32; rows];
+
+        #[cfg(target_arch = "x86_64")]
+        if std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("f16c")
+            && std::arch::is_x86_feature_detected!("fma")
+        {
+            group.bench_with_input(BenchmarkId::new("fp16_w16a16", &shape), &(), |b, _| {
+                b.iter(|| unsafe {
+                    gemv_fp16_avx2(
+                        black_box(&fp16_weights),
+                        rows,
+                        cols,
+                        black_box(&x),
+                        black_box(&mut y_fp16),
+                    );
+
+                    black_box(&y_fp16);
                 });
             });
         }
