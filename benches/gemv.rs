@@ -39,9 +39,7 @@ fn make_weights(rows: usize, cols: usize) -> NvFp4Matrix {
 fn bench_gemv(c: &mut Criterion) {
     let mut group = c.benchmark_group("nvfp4_w4a16_gemv");
 
-    // 오늘 빠르게 확인하려면 이 두 개면 충분.
-    //
-    // 최종 결과 낼 때 4096x4096 등을 더 추가.
+    
     let shapes = [
         (1024usize, 1024usize),
         (4096usize, 4096usize),
